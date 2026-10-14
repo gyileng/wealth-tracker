@@ -15,7 +15,7 @@ export default fp(async (fastify) => {
 
     if (whiteList.includes(request.url)) return
 
-    const { needPassword } = await checkPassword(request)
+    const { needPassword } = await checkPassword(request, reply)
     if (needPassword) {
       reply.code(401).send({
         success: false,

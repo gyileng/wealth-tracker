@@ -4,7 +4,7 @@ import Password, {
   normalizePasswordInput,
   verifyPasswordCandidates,
 } from '../models/password'
-import { createSession, validateSession } from '../models/session'
+import { createSession, validateSession, SESSION_TTL_SECONDS } from '../models/session'
 import { parseBooleanEnv } from '../helper/constant'
 
 /**
@@ -25,11 +25,11 @@ const buildSessionCookieOptions = (request: FastifyRequest) => {
     secure,
     sameSite: 'strict' as const,
     path: '/',
-    maxAge: 15 * 60, // 15 minutes
+    maxAge: SESSION_TTL_SECONDS,
   }
 }
 
-export const checkPassword = async (request: FastifyRequest) => {
+export const checkPassword = async (request: FastifyRequest, reply: FastifyReply) => {
   const canBeReset = parseBooleanEnv(process.env.CAN_BE_RESET, false)
   const allowPassword = parseBooleanEnv(process.env.ALLOW_PASSWORD, false)
   const havePassword = !!(await Password.findOne({ where: {} }))
@@ -40,8 +40,10 @@ export const checkPassword = async (request: FastifyRequest) => {
 
   const sessionId = request.cookies.sessionId
   if (sessionId) {
-    const isValid = await validateSession(sessionId)
+    const isValid = await validateSession(sessionId, true)
     if (isValid) {
+      // Keep the browser cookie and server session on the same sliding timeout.
+      reply.setCookie('sessionId', sessionId, buildSessionCookieOptions(request))
       return { allowPassword, needPassword: false, havePassword, canBeReset }
     }
   }

@@ -2,6 +2,8 @@ import { DataTypes, Model, Op } from 'sequelize'
 import { sequelize } from './index'
 import crypto from 'crypto'
 
+export const SESSION_TTL_SECONDS = 30 * 60
+
 class Session extends Model {
   declare id: string
   declare expiresAt: Date
@@ -26,8 +28,7 @@ Session.init(
 
 export const createSession = async (): Promise<string> => {
   const sessionId = crypto.randomBytes(32).toString('hex')
-  const expiresAt = new Date()
-  expiresAt.setMinutes(expiresAt.getMinutes() + 15) // 15 分钟有效期
+  const expiresAt = new Date(Date.now() + SESSION_TTL_SECONDS * 1000)
 
   await Session.create({
     id: sessionId,
@@ -37,14 +38,18 @@ export const createSession = async (): Promise<string> => {
   return sessionId
 }
 
-export const validateSession = async (sessionId: string): Promise<boolean> => {
+export const validateSession = async (sessionId: string, renew = false): Promise<boolean> => {
   const session = await Session.findByPk(sessionId)
   if (!session) return false
 
-  const now = new Date()
-  if (now > session.expiresAt) {
+  const now = Date.now()
+  if (now >= session.expiresAt.getTime()) {
     await session.destroy()
     return false
+  }
+
+  if (renew) {
+    await session.update({ expiresAt: new Date(now + SESSION_TTL_SECONDS * 1000) })
   }
 
   return true
